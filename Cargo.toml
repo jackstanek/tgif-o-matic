@@ -1,0 +1,14 @@
+[package]
+name = "tgif-o-matic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.9"
+jiff = "0.2.35"
+log = "0.4.33"
+rand = "0.10.2"
+rand_distr = "0.6.0"
+rustrict = "0.7.38"
+sqlx = { version = "0.9.0", features = ["_sqlite", "runtime-tokio"] }
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
