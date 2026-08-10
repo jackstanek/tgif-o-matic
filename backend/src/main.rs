@@ -1,10 +1,12 @@
 use std::{path::Path, time::Duration};
 
 use axum::{Router, routing::get};
-use rand::rngs::Xoshiro256PlusPlus;
 
+mod game;
 mod joincode;
 mod state;
+mod template;
+mod user;
 
 /// Initialize the SQLite conneciton pool for the main application database
 ///

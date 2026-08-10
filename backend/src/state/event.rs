@@ -2,7 +2,12 @@
 
 use crate::joincode::JoinCode;
 
+#[derive(sqlx::Type, Debug, Clone, PartialEq, Eq)]
+#[sqlx(transparent)]
 pub struct TeamId(usize);
+
+#[derive(sqlx::Type, Debug, Clone, PartialEq, Eq)]
+#[sqlx(transparent)]
 pub struct PlayerId(usize);
 
 /// Length of the join code for games and teams

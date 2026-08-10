@@ -10,5 +10,5 @@ log = "0.4.33"
 rand = "0.10.2"
 rand_distr = "0.6.0"
 rustrict = "0.7.38"
-sqlx = { version = "0.9.0", features = ["_sqlite", "runtime-tokio"] }
+sqlx = { version = "0.9.0", features = ["sqlite", "migrate", "runtime-tokio"] }
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
