@@ -2,12 +2,8 @@
 //! mostly boils down to handling permissions in-game.
 
 use anyhow::{Context, anyhow};
-use argon2::{
-    Argon2, PasswordHasher,
-    password_hash::{Salt, SaltString},
-};
-use log::{debug, info};
-use rand::distributions::{Alphanumeric, DistString};
+use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
+use log::info;
 
 /// Opaque user ID for administrators.
 #[derive(sqlx::Type, Debug, Clone, PartialEq, Eq)]
@@ -82,7 +78,7 @@ impl Admin {
             "#,
         )
         .bind(admin_username)
-        .bind(&admin_hash.to_string())
+        .bind(admin_hash.to_string())
         .execute(&mut *conn)
         .await
         .context("couldn't fetch admin accounts from database")?;

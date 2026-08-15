@@ -3,6 +3,8 @@
 //! Each player uses a join code to enter a game, and each player forming a team
 //! distributes a join code to the players on their team to join their team.
 
+use std::fmt::Display;
+
 use rustrict::CensorStr;
 
 #[derive(Debug, Clone, Copy)]
@@ -31,10 +33,11 @@ impl<const N: usize> JoinCode<N> {
             }
         }
     }
+}
 
-    /// Emit the [`JoinCode`] as a [`String`].
-    pub fn to_string(&self) -> String {
-        String::from_utf8_lossy(&self.0).to_string()
+impl<const N: usize> Display for JoinCode<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", String::from_utf8_lossy(&self.0))
     }
 }
 

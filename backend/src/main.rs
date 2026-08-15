@@ -1,9 +1,8 @@
 use std::time::Duration;
 
 use axum::{Router, routing::get};
-use env_logger;
 use log::{debug, info, warn};
-use rand::SeedableRng;
+use rand_chacha::rand_core::SeedableRng;
 
 use crate::{config::BackendConfig, user::Admin};
 
@@ -54,8 +53,8 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("could not initialize database");
 
-    let mut rng = rand::rngs::OsRng;
-    info!("bootstrapped ChaCha8 rng");
+    let mut rng = rand_chacha::ChaCha12Rng::from_rng(&mut rand::rngs::OsRng)?;
+    debug!("bootstrapped RNG");
 
     Admin::init_admin_account(&config, &db, &mut rng).await?;
 
