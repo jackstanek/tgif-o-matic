@@ -16,12 +16,29 @@ CREATE TABLE games (
     created_at    INTEGER NOT NULL
 ) STRICT;
 
+-- Questions instantiated from templates
+CREATE TABLE questions (
+    id            INTEGER PRIMARY KEY,
+    game_id       INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    section       INTEGER NOT NULL,
+    text          TEXT NOT NULL
+) STRICT;
+
+-- Each team's answers
+CREATE TABLE answers (
+    id            INTEGER PRIMARY KEY,
+    game_id       INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    team_id       INTEGER NOT NULL REFERENCES players(id),
+    question_id   INTEGER NOT NULL REFERENCES questions(id),
+    answer        TEXT,  -- NULL answer means that the question hasn't been answered yet.
+    is_correct    INTEGER
+) STRICT;
+
 -- Information about the administrators, who can create templates and run game instances.
 CREATE TABLE admins (
     id            INTEGER PRIMARY KEY,
     username      TEXT NOT NULL,
-    pw_hash       TEXT NOT NULL,
-    pw_salt       TEXT NOT NULL
+    pw_hash       TEXT NOT NULL  -- Salted hash in PHC format
 ) STRICT;
 
 -- Information about players. Each player is ephemeral and per-game (no

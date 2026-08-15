@@ -1,0 +1,6 @@
+**/target
+
+# Test databases
+*.db
+*.*-shm
+*.*-wal

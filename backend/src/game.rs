@@ -7,6 +7,6 @@ pub(crate) struct GameId(usize);
 /// Instance of a game.
 struct GameInstance {
     id: crate::game::GameId,
-    owner: crate::user::UserId,
+    owner: crate::user::AdminId,
     template: crate::template::TemplateId,
 }

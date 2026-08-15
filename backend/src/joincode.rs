@@ -19,11 +19,11 @@ impl<const N: usize> JoinCode<N> {
     }
 
     /// Create a [`JoinCode`] from an [`rand::RngExt`]
-    pub fn from_rng(rng: &mut impl rand::RngExt) -> Self {
+    pub fn from_rng(rng: &mut impl rand::Rng) -> Self {
         let mut buf = [0; N];
         loop {
             for ptr in buf.iter_mut() {
-                *ptr = rng.sample(rand_distr::Alphanumeric);
+                *ptr = rng.sample(rand::distributions::Alphanumeric);
             }
             let code = Self::from_buf(&buf);
             if let Some(code) = code {
