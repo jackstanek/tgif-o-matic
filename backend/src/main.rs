@@ -56,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
     let mut rng = rand_chacha::ChaCha12Rng::from_rng(&mut rand::rngs::OsRng)?;
     debug!("bootstrapped RNG");
 
-    Admin::init_admin_account(&config, &db, &mut rng).await?;
+    user::init_admin_account(&config, &db, &mut rng).await?;
 
     let app = Router::new().route("/", get(|| async { "Hello world!" }));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();

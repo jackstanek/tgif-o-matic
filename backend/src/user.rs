@@ -40,54 +40,52 @@ where
         .collect()
 }
 
-impl Admin {
-    /// Initialize an admin account if one does not exist. If at least one admin
-    /// account exists, then this is a no-op. Otherwise, if no admin accounts
-    /// exist, initialize one with the username and password supplied in the
-    /// configuration. If no credentials are in the configuration, then use
-    /// username "admin" and a random password.
-    pub(crate) async fn init_admin_account<R>(
-        config: &crate::config::BackendConfig,
-        pool: &sqlx::Pool<sqlx::Sqlite>,
-        rng: &mut R,
-    ) -> anyhow::Result<()>
-    where
-        R: rand::CryptoRng + rand::Rng,
-    {
-        let (admin_username, admin_password) = if let Some(pw) = &config.admin_user_password {
-            pw.to_owned()
-        } else {
-            (
-                DEFAULT_ADMIN_USERNAME.to_string(),
-                generate_password(rng, RANDOM_ADMIN_PW_LENGTH),
-            )
-        };
-        let admin_salt = SaltString::generate(rng);
-        let admin_hash = Argon2::default()
-            .hash_password(admin_password.as_bytes(), &admin_salt)
-            .map_err(|e| anyhow!("couldn't hash password: {e}"))?;
+/// Initialize an admin account if one does not exist. If at least one admin
+/// account exists, then this is a no-op. Otherwise, if no admin accounts
+/// exist, initialize one with the username and password supplied in the
+/// configuration. If no credentials are in the configuration, then use
+/// username "admin" and a random password.
+pub(crate) async fn init_admin_account<R>(
+    config: &crate::config::BackendConfig,
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    rng: &mut R,
+) -> anyhow::Result<()>
+where
+    R: rand::CryptoRng + rand::Rng,
+{
+    let (admin_username, admin_password) = if let Some(pw) = &config.admin_user_password {
+        pw.to_owned()
+    } else {
+        (
+            DEFAULT_ADMIN_USERNAME.to_string(),
+            generate_password(rng, RANDOM_ADMIN_PW_LENGTH),
+        )
+    };
+    let admin_salt = SaltString::generate(rng);
+    let admin_hash = Argon2::default()
+        .hash_password(admin_password.as_bytes(), &admin_salt)
+        .map_err(|e| anyhow!("couldn't hash password: {e}"))?;
 
-        // Transaction to insert the admin account if one does not exist
-        let mut conn = pool.acquire().await?;
-        sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
-        let result = sqlx::query(
-            r#"
+    // Transaction to insert the admin account if one does not exist
+    let mut conn = pool.acquire().await?;
+    sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
+    let result = sqlx::query(
+        r#"
             INSERT INTO admins (username, pw_hash)
             SELECT ?, ?
             WHERE NOT EXISTS (SELECT 1 FROM admins)
             "#,
-        )
-        .bind(admin_username)
-        .bind(admin_hash.to_string())
-        .execute(&mut *conn)
-        .await
-        .context("couldn't fetch admin accounts from database")?;
+    )
+    .bind(admin_username)
+    .bind(admin_hash.to_string())
+    .execute(&mut *conn)
+    .await
+    .context("couldn't fetch admin accounts from database")?;
 
-        sqlx::query("COMMIT").execute(&mut *conn).await?;
+    sqlx::query("COMMIT").execute(&mut *conn).await?;
 
-        if result.rows_affected() > 0 {
-            info!("admin account created: admin/{admin_password}");
-        }
-        Ok(())
+    if result.rows_affected() > 0 {
+        info!("admin account created: admin/{admin_password}");
     }
+    Ok(())
 }

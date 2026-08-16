@@ -2,3 +2,7 @@
 
 mod event;
 mod phase;
+
+pub(crate) struct GameState {
+    phase: phase::GamePhase,
+}
