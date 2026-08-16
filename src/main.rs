@@ -7,7 +7,7 @@ use crate::config::BackendConfig;
 
 mod config;
 mod db;
-mod joincode;
+mod random_str;
 
 fn build_router() -> Router {
     let serve_dir = services::ServeDir::new("assets");

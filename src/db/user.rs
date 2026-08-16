@@ -5,6 +5,8 @@ use anyhow::{Context, anyhow};
 use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 use log::info;
 
+use crate::random_str::generate_legible_string;
+
 /// Opaque user ID for administrators.
 #[derive(sqlx::Type, Debug, Clone, PartialEq, Eq)]
 #[sqlx(transparent)]
@@ -26,19 +28,6 @@ pub(crate) struct Admin {
 /// Default administrator username
 const DEFAULT_ADMIN_USERNAME: &str = "admin";
 const RANDOM_ADMIN_PW_LENGTH: usize = 12;
-const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-
-fn generate_password<R>(rng: &mut R, len: usize) -> String
-where
-    R: rand::CryptoRng + rand::Rng,
-{
-    (0..len)
-        .map(|_| {
-            let idx = rng.gen_range(0..CHARSET.len());
-            CHARSET[idx] as char
-        })
-        .collect()
-}
 
 /// Initialize an admin account if one does not exist. If at least one admin
 /// account exists, then this is a no-op. Otherwise, if no admin accounts
@@ -58,7 +47,7 @@ where
     } else {
         (
             DEFAULT_ADMIN_USERNAME.to_string(),
-            generate_password(rng, RANDOM_ADMIN_PW_LENGTH),
+            generate_legible_string(rng, RANDOM_ADMIN_PW_LENGTH),
         )
     };
     let admin_salt = SaltString::generate(rng);
