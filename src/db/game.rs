@@ -2,9 +2,7 @@
 
 use sqlx::prelude::FromRow;
 
-/// Identifier for a game instance.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct GameId(usize);
+db_id_type!(GameId);
 
 /// Instance of a game.
 #[derive(FromRow)]

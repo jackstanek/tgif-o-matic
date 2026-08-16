@@ -6,6 +6,16 @@ use log::{debug, info, warn};
 
 use crate::config;
 
+macro_rules! db_id_type {
+    ($($name:ident),+) => {
+        $(
+            #[derive(sqlx::Type, Debug, Clone, PartialEq, Eq)]
+            #[sqlx(transparent)]
+            pub(crate) struct $name(i32);
+        )+
+    };
+}
+
 mod game;
 mod state;
 mod template;

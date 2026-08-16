@@ -7,15 +7,7 @@ use log::info;
 
 use crate::random_str::generate_legible_string;
 
-/// Opaque user ID for administrators.
-#[derive(sqlx::Type, Debug, Clone, PartialEq, Eq)]
-#[sqlx(transparent)]
-pub(crate) struct AdminId(i32);
-
-/// Opaque user ID for players.
-#[derive(sqlx::Type, Debug, Clone, PartialEq, Eq)]
-#[sqlx(transparent)]
-pub(crate) struct PlayerId(i32);
+db_id_type!(AdminId, PlayerId);
 
 #[derive(sqlx::FromRow)]
 #[sqlx(rename_all = "snake_case")]
