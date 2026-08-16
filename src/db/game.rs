@@ -9,7 +9,7 @@ pub(crate) struct GameId(usize);
 /// Instance of a game.
 #[derive(FromRow)]
 struct GameInstance {
-    id: crate::game::GameId,
-    owner: crate::user::AdminId,
-    template: crate::template::TemplateId,
+    id: crate::db::game::GameId,
+    owner: crate::db::user::AdminId,
+    template: crate::db::template::TemplateId,
 }
