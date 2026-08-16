@@ -91,6 +91,7 @@ CREATE TABLE game_state (
     phase               TEXT NOT NULL,
     current_question_id INTEGER REFERENCES questions(id),
     phase_entered_at    INTEGER NOT NULL,
+    section_deadline    INTEGER,  -- deadline to finalize answers for this section
     CHECK (phase IN ("lobby", "questions_open", "section_review", "section_score", "final_winners")),
     CHECK ((phase IN ("question_open", "question_closed")) = (current_question_id IS NOT NULL))
 ) STRICT;
