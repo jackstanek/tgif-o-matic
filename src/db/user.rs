@@ -1,20 +1,36 @@
-//! User management and authentication. User management is very simple and
-//! mostly boils down to handling permissions in-game.
+//! User management, authentication, and sessions. There are two types of users:
+//! admins and players. Admins can create templates and game instances, and then
+//! run the games. Players can participate, answer questions, etc. Admin
+//! accounts are persistent; if one doesn't exist on server launch, one is
+//! created. Player "accounts" are ephemeral and are tied to specific game
+//! instances.
 
 use anyhow::{Context, anyhow};
-use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
-use log::info;
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
+use log::{debug, info};
 
 use crate::random_str::generate_legible_string;
 
 db_id_type!(AdminId, PlayerId);
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Debug)]
 #[sqlx(rename_all = "snake_case")]
 pub(crate) struct Admin {
     id: AdminId,
     username: String,
     pw_hash: String,
+}
+
+impl Admin {
+    /// Verify the user's password against the salted hash.
+    fn check_password(&self, password: &str) -> anyhow::Result<bool> {
+        let pw_hash = PasswordHash::new(&self.pw_hash)
+            .map_err(|e| anyhow!("couldn't parse password hash: {e}"))?;
+        let check_result = Argon2::default()
+            .verify_password(password.as_bytes(), &pw_hash)
+            .is_ok();
+        Ok(check_result)
+    }
 }
 
 /// Default administrator username
@@ -69,4 +85,29 @@ where
         info!("admin account created: admin/{admin_password}");
     }
     Ok(())
+}
+
+/// Check a username/password combination against the database.
+pub(crate) async fn check_credentials(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    username: &str,
+    password: &str,
+) -> anyhow::Result<bool> {
+    let mut conn = pool.acquire().await?;
+    let result = sqlx::query_as::<_, Admin>(
+        r#"
+        SELECT  pw_hash FROM admins WHERE username = ?
+        "#,
+    )
+    .bind(username)
+    .fetch_optional(&mut *conn)
+    .await
+    .context("couldn't fetch admin account from database")?;
+
+    debug!("{result:?}");
+    let Some(admin) = result else {
+        return Ok(false);
+    };
+
+    admin.check_password(password)
 }
