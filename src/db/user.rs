@@ -5,11 +5,13 @@
 //! created. Player "accounts" are ephemeral and are tied to specific game
 //! instances.
 
-use anyhow::{Context, anyhow};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
 use tracing::{debug, info};
 
-use crate::random_str::generate_legible_string;
+use crate::{
+    context::{Argon2Error, TracingContext},
+    random_str::generate_legible_string,
+};
 
 db_id_type!(AdminId, PlayerId);
 
@@ -25,7 +27,8 @@ impl Admin {
     /// Verify the user's password against the salted hash.
     fn check_password(&self, password: &str) -> anyhow::Result<bool> {
         let pw_hash = PasswordHash::new(&self.pw_hash)
-            .map_err(|e| anyhow!("couldn't parse password hash: {e}"))?;
+            .map_err(Argon2Error::from)
+            .tracing_context("calculating argon2 hash of password")?;
         let check_result = Argon2::default()
             .verify_password(password.as_bytes(), &pw_hash)
             .is_ok();
@@ -62,7 +65,8 @@ where
     let admin_salt = SaltString::generate(rng);
     let admin_hash = Argon2::default()
         .hash_password(admin_password.as_bytes(), &admin_salt)
-        .map_err(|e| anyhow!("couldn't hash password: {e}"))?;
+        .map_err(Argon2Error::from)
+        .tracing_context("couldn't hash password")?;
 
     // Transaction to insert the admin account if one does not exist
     let mut conn = pool.acquire().await?;
@@ -72,13 +76,13 @@ where
             INSERT INTO admins (username, pw_hash)
             SELECT ?, ?
             WHERE NOT EXISTS (SELECT 1 FROM admins)
-            "#,
+        "#,
     )
     .bind(admin_username)
     .bind(admin_hash.to_string())
     .execute(&mut *conn)
     .await
-    .context("couldn't fetch admin accounts from database")?;
+    .tracing_context("checking if admins table is empty")?;
 
     sqlx::query("COMMIT").execute(&mut *conn).await?;
 
@@ -104,7 +108,7 @@ pub(crate) async fn check_credentials(
     .bind(username)
     .fetch_optional(&mut *conn)
     .await
-    .context("couldn't fetch admin account from database")?;
+    .tracing_context("fetching admin account from database")?;
 
     let Some(admin) = result else {
         debug!("auth attempted for non-existent user {username}");

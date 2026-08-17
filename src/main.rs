@@ -5,6 +5,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::config::BackendConfig;
 
 mod config;
+mod context;
 mod db;
 mod random_str;
 mod routes;
