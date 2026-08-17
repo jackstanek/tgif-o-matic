@@ -1,5 +1,6 @@
-use log::debug;
 use rand_chacha::rand_core::SeedableRng;
+use tracing::debug;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::BackendConfig;
 
@@ -10,7 +11,13 @@ mod routes;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME")).into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
     let config = BackendConfig::from_env();
     let db = db::init_db(&config)

@@ -7,7 +7,7 @@
 
 use anyhow::{Context, anyhow};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
-use log::{debug, info};
+use tracing::{debug, info};
 
 use crate::random_str::generate_legible_string;
 
@@ -29,6 +29,7 @@ impl Admin {
         let check_result = Argon2::default()
             .verify_password(password.as_bytes(), &pw_hash)
             .is_ok();
+        info!("password check for {}: {check_result}", self.username);
         Ok(check_result)
     }
 }
@@ -88,6 +89,7 @@ where
 }
 
 /// Check a username/password combination against the database.
+#[tracing::instrument]
 pub(crate) async fn check_credentials(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     username: &str,
@@ -96,7 +98,7 @@ pub(crate) async fn check_credentials(
     let mut conn = pool.acquire().await?;
     let result = sqlx::query_as::<_, Admin>(
         r#"
-        SELECT  pw_hash FROM admins WHERE username = ?
+        SELECT id, username, pw_hash FROM admins WHERE username = ?
         "#,
     )
     .bind(username)
@@ -104,8 +106,8 @@ pub(crate) async fn check_credentials(
     .await
     .context("couldn't fetch admin account from database")?;
 
-    debug!("{result:?}");
     let Some(admin) = result else {
+        debug!("auth attempted for non-existent user {username}");
         return Ok(false);
     };
 

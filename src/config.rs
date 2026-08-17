@@ -19,9 +19,7 @@ impl BackendConfig {
         let db_path = std::env::var("DATABASE_URL")
             .ok()
             .map(|s| PathBuf::from(s.trim_start_matches("sqlite://")));
-        let rng_seed = std::env::var("RNG_SEED")
-            .ok()
-            .and_then(|s| s.parse().ok());
+        let rng_seed = std::env::var("RNG_SEED").ok().and_then(|s| s.parse().ok());
         Self {
             admin_user_password: user.zip(pw),
             db_path,

@@ -4,7 +4,7 @@ use axum::{Form, extract::State, response::Html};
 use serde::Deserialize;
 use sqlx::SqlitePool;
 
-use crate::db::check_credentials;
+use crate::db;
 
 #[derive(Deserialize, Clone)]
 pub(crate) struct AuthInput {
@@ -30,7 +30,7 @@ pub(crate) async fn accept_login_form(
     State(pool): State<SqlitePool>,
     Form(input): Form<AuthInput>,
 ) -> Html<&'static str> {
-    let res = check_credentials(&pool, &input.username, &input.password)
+    let res = db::check_credentials(&pool, &input.username, &input.password)
         .await
         .is_ok_and(|x| x);
     if res {
