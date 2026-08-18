@@ -39,6 +39,8 @@ impl Admin {
 
 /// Default administrator username
 const DEFAULT_ADMIN_USERNAME: &str = "admin";
+
+/// Default length of the admin password, if one should be generated
 const RANDOM_ADMIN_PW_LENGTH: usize = 12;
 
 /// Initialize an admin account if one does not exist. If at least one admin
@@ -92,7 +94,9 @@ where
     Ok(())
 }
 
-/// Check a username/password combination against the database.
+/// Check a username/password combination against the database. Returns Ok(true)
+/// if the username/password pair is in the admins table, and Ok(false)
+/// otherwise.
 #[tracing::instrument]
 pub(crate) async fn check_credentials(
     pool: &sqlx::Pool<sqlx::Sqlite>,
