@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.104"
 argon2 = "0.5.3"
+askama = "0.16.0"
 axum = "0.8.9"
 jiff = "0.2.35"
 rand = "0.8.7"
