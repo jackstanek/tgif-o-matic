@@ -9,7 +9,6 @@ use crate::{
 };
 
 mod config;
-mod context;
 mod db;
 mod domain;
 mod random_str;
