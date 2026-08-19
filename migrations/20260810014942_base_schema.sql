@@ -80,8 +80,8 @@ CREATE TABLE sessions (
     game_id       INTEGER REFERENCES games(id) ON DELETE CASCADE,
     admin_id      INTEGER REFERENCES admins(id),  -- null for player sessions
     player_id     INTEGER REFERENCES players(id), -- null for admin sessions
-    created_at    INTEGER NOT NULL,
-    expires_at    INTEGER NOT NULL,
+    created_at    INTEGER NOT NULL DEFAULT (unixepoch('now')),
+    expires_at    INTEGER NOT NULL DEFAULT (unixepoch('now', '+24 hours'),
     CHECK ((admin_id IS NULL) <> (player_id IS NULL))
 ) STRICT;
 

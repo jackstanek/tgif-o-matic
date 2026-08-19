@@ -5,73 +5,48 @@
 //! created. Player "accounts" are ephemeral and are tied to specific game
 //! instances.
 
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
-use tracing::{debug, info};
+use sqlx::Row;
 
-use crate::{
-    context::{Argon2Error, TracingContext},
-    random_str::generate_legible_string,
-};
+use crate::{db::decode_timestamp, db::game::GameId};
 
 db_id_type!(AdminId, PlayerId);
 
 #[derive(sqlx::FromRow, Debug)]
-#[sqlx(rename_all = "snake_case")]
-pub(crate) struct Admin {
-    id: AdminId,
-    username: String,
-    pw_hash: String,
+pub(crate) struct AdminRow {
+    pub(crate) id: AdminId,
+    pub(crate) username: String,
+    pub(crate) pw_hash: String,
 }
 
-impl Admin {
-    /// Verify the user's password against the salted hash.
-    fn check_password(&self, password: &str) -> anyhow::Result<bool> {
-        let pw_hash = PasswordHash::new(&self.pw_hash)
-            .map_err(Argon2Error::from)
-            .tracing_context("calculating argon2 hash of password")?;
-        let check_result = Argon2::default()
-            .verify_password(password.as_bytes(), &pw_hash)
-            .is_ok();
-        info!("password check for {}: {check_result}", self.username);
-        Ok(check_result)
+impl AdminRow {
+    /// Get a single [`AdminRow`] by username.
+    pub(crate) async fn by_username<'e, E>(exec: E, username: &str) -> sqlx::Result<Option<Self>>
+    where
+        E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+    {
+        sqlx::query_as::<_, AdminRow>(
+            r#"
+            SELECT id, username, pw_hash FROM admins WHERE username = ?
+            "#,
+        )
+        .bind(username)
+        .fetch_optional(exec)
+        .await
     }
 }
 
-/// Default administrator username
-const DEFAULT_ADMIN_USERNAME: &str = "admin";
-
-/// Default length of the admin password, if one should be generated
-const RANDOM_ADMIN_PW_LENGTH: usize = 12;
-
-/// Initialize an admin account if one does not exist. If at least one admin
-/// account exists, then this is a no-op. Otherwise, if no admin accounts
-/// exist, initialize one with the username and password supplied in the
-/// configuration. If no credentials are in the configuration, then use
-/// username "admin" and a random password.
-pub(crate) async fn init_admin_account<R>(
-    config: &crate::config::BackendConfig,
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    rng: &mut R,
-) -> anyhow::Result<()>
+/// Initialize an admin account if one does not exist. If an admin account
+/// exists, this is a no-op.
+pub(crate) async fn init_admin_account<'e, E>(
+    exec: E,
+    username: &str,
+    phc_string: &str,
+) -> sqlx::Result<bool>
 where
-    R: rand::CryptoRng + rand::Rng,
+    E: sqlx::Acquire<'e, Database = sqlx::Sqlite>,
 {
-    let (admin_username, admin_password) = if let Some(pw) = &config.admin_user_password {
-        pw.to_owned()
-    } else {
-        (
-            DEFAULT_ADMIN_USERNAME.to_string(),
-            generate_legible_string(rng, RANDOM_ADMIN_PW_LENGTH),
-        )
-    };
-    let admin_salt = SaltString::generate(rng);
-    let admin_hash = Argon2::default()
-        .hash_password(admin_password.as_bytes(), &admin_salt)
-        .map_err(Argon2Error::from)
-        .tracing_context("couldn't hash password")?;
-
     // Transaction to insert the admin account if one does not exist
-    let mut conn = pool.acquire().await?;
+    let mut conn = exec.acquire().await?;
     sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
     let result = sqlx::query(
         r#"
@@ -80,44 +55,66 @@ where
             WHERE NOT EXISTS (SELECT 1 FROM admins)
         "#,
     )
-    .bind(admin_username)
-    .bind(admin_hash.to_string())
+    .bind(username)
+    .bind(phc_string)
     .execute(&mut *conn)
-    .await
-    .tracing_context("checking if admins table is empty")?;
+    .await?;
 
     sqlx::query("COMMIT").execute(&mut *conn).await?;
 
-    if result.rows_affected() > 0 {
-        info!("admin account created: admin/{admin_password}");
-    }
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }
 
-/// Check a username/password combination against the database. Returns Ok(true)
-/// if the username/password pair is in the admins table, and Ok(false)
-/// otherwise.
-#[tracing::instrument]
-pub(crate) async fn check_credentials(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    username: &str,
-    password: &str,
-) -> anyhow::Result<bool> {
-    let mut conn = pool.acquire().await?;
-    let result = sqlx::query_as::<_, Admin>(
+/// Session record in the database.
+#[derive(Debug, Clone)]
+pub(crate) struct Session {
+    token_hash: Vec<u8>,
+    game_id: GameId,
+    admin_id: AdminId,
+    player_id: PlayerId,
+    created_at: jiff::Timestamp,
+    expires_at: jiff::Timestamp,
+}
+
+impl sqlx::FromRow<'_, sqlx::sqlite::SqliteRow> for Session {
+    fn from_row(row: &sqlx::sqlite::SqliteRow) -> sqlx::Result<Self> {
+        Ok(Self {
+            token_hash: row.try_get("token_hash")?,
+            game_id: row.try_get("game_id")?,
+            admin_id: row.try_get("admin_id")?,
+            player_id: row.try_get("player_id")?,
+            created_at: row.try_get("created_at").and_then(decode_timestamp)?,
+            expires_at: row.try_get("expires_at").and_then(decode_timestamp)?,
+        })
+    }
+}
+
+/// Create a user session for the given admin.
+pub(crate) async fn create_admin_session<'e, E>(
+    exec: E,
+    admin: &AdminRow,
+) -> anyhow::Result<Session>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    todo!()
+}
+
+/// Clean up old sessions. Deletes all sessions for which the `expires_at`
+/// timestamp is earlier than the current time. This function should run
+/// periodically to keep the session table reasonably sized.
+pub(crate) async fn cleanup_old_sessions<'e, E>(
+    exec: E,
+) -> anyhow::Result<sqlx::sqlite::SqliteQueryResult>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    Ok(sqlx::query!(
         r#"
-        SELECT id, username, pw_hash FROM admins WHERE username = ?
-        "#,
+            DELETE FROM sessions
+            WHERE expires_at < unixepoch('now')
+        "#
     )
-    .bind(username)
-    .fetch_optional(&mut *conn)
-    .await
-    .tracing_context("fetching admin account from database")?;
-
-    let Some(admin) = result else {
-        debug!("auth attempted for non-existent user {username}");
-        return Ok(false);
-    };
-
-    admin.check_password(password)
+    .execute(exec)
+    .await?)
 }

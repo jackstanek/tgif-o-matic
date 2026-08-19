@@ -17,10 +17,11 @@ macro_rules! db_id_type {
 }
 
 mod game;
-mod state;
 mod template;
 mod user;
 
+pub(crate) use game::*;
+pub(crate) use template::*;
 pub(crate) use user::*;
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
@@ -52,4 +53,9 @@ pub(crate) async fn init_db(config: &config::BackendConfig) -> anyhow::Result<sq
     debug!("got db connection");
     MIGRATOR.run(&pool).await?;
     Ok(pool)
+}
+
+/// Helper to decode timestamps from the database
+fn decode_timestamp(t: i64) -> sqlx::Result<jiff::Timestamp> {
+    jiff::Timestamp::from_second(t).map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }

@@ -1,0 +1,27 @@
+body {
+    background-color:#FAF4D3;
+    color: #0C1618;
+}
+
+/*https://coolors.co/0c1618-004643-faf4d3-d1ac00-f6be9a*/
+/*Teal: 004643 */
+/*Goldenrod: D1AC00*/
+/*pink: F6BE9A*/
+
+a {
+    color: #004643;
+}
+
+a:hover {
+    color: #006661;
+    border-bottom: 1em;
+}
+
+footer {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translate(-50%, -50%);
+  margin: 0 auto;
+  font-size: 12px;
+}
