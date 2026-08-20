@@ -7,12 +7,17 @@ edition = "2024"
 anyhow = "1.0.104"
 argon2 = "0.5.3"
 askama = "0.16.0"
-axum = "0.8.9"
+async-trait = "0.1.92"
+axum = { version = "0.8.9", features = ["macros"] }
+axum-extra = { version = "0.12.6", features = ["cookie"] }
+derive_builder = "0.20.2"
+derive_more = { version = "2.1.1", features = ["from"] }
 jiff = "0.2.35"
 rand = "0.8.7"
 rand_chacha = "0.3.1"
 rustrict = "0.7.38"
 serde = "1.0.229"
+sha2 = "0.11.0"
 sqlx = { version = "0.9.0", features = ["sqlite", "migrate", "runtime-tokio"] }
 thiserror = "2.0.20"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }

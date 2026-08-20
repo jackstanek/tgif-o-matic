@@ -5,9 +5,11 @@ use tracing::{debug, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
-    config::BackendConfig, domain::auth::Argon2Error, random_str::generate_legible_string,
+    appstate::AppStateBuilder, config::BackendConfig, domain::auth::Argon2Error,
+    random_str::generate_legible_string,
 };
 
+mod appstate;
 mod config;
 mod db;
 mod domain;
@@ -69,12 +71,17 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("could not initialize database");
 
-    let mut rng = rand_chacha::ChaCha12Rng::from_rng(&mut rand::rngs::OsRng)?;
+    let mut rng = rand_chacha::ChaCha20Rng::from_rng(&mut rand::rngs::OsRng)?;
     debug!("bootstrapped RNG");
 
     init_admin_account(&mut rng, &db, &config).await?;
 
-    let app = routes::build_router(db);
+    let state = AppStateBuilder::default()
+        .db(db)
+        .rng(rng)
+        .build()
+        .expect("could not build app state");
+    let app = routes::build_router(state);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 

@@ -3,6 +3,12 @@
 use std::fmt::Display;
 
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
+use rand::Rng;
+use rand_chacha::rand_core::CryptoRngCore;
+use sha2::{
+    Digest, Sha256,
+    digest::{array::Array, consts::U32},
+};
 use tracing::info;
 
 /// Wrapper type for [`argon2::Error`], which doesn't implement
@@ -52,5 +58,33 @@ impl Admin {
             .is_ok();
         info!("password check for {}: {check_result}", self.username);
         Ok(check_result)
+    }
+}
+
+// 128 bits
+const SESSION_TOKEN_BYTES: usize = 16;
+
+/// Session token
+pub(crate) struct SessionToken {
+    token: [u8; SESSION_TOKEN_BYTES],
+}
+
+impl SessionToken {
+    /// Generate a new random session token
+    pub(crate) fn generate<R>(rng: &mut R) -> Self
+    where
+        R: CryptoRngCore,
+    {
+        Self { token: rng.r#gen() }
+    }
+
+    /// Calculate a SHA-256 hash of the token
+    pub(crate) fn sha256(&self) -> Array<u8, U32> {
+        Sha256::digest(self.token)
+    }
+
+    /// Construct a `SessionToken` from a byte slice
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        bytes.try_into().ok().map(|token| Self { token })
     }
 }

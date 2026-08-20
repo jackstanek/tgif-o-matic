@@ -7,7 +7,7 @@
 
 use sqlx::Row;
 
-use crate::{db::decode_timestamp, db::game::GameId};
+use crate::db::{decode_timestamp, game::GameId};
 
 db_id_type!(AdminId, PlayerId);
 
@@ -67,16 +67,16 @@ where
 
 /// Session record in the database.
 #[derive(Debug, Clone)]
-pub(crate) struct Session {
-    token_hash: Vec<u8>,
-    game_id: GameId,
-    admin_id: AdminId,
-    player_id: PlayerId,
-    created_at: jiff::Timestamp,
-    expires_at: jiff::Timestamp,
+pub(crate) struct SessionRow {
+    pub(crate) token_hash: Vec<u8>,
+    pub(crate) game_id: Option<GameId>,
+    pub(crate) admin_id: Option<AdminId>,
+    pub(crate) player_id: Option<PlayerId>,
+    pub(crate) created_at: jiff::Timestamp,
+    pub(crate) expires_at: jiff::Timestamp,
 }
 
-impl sqlx::FromRow<'_, sqlx::sqlite::SqliteRow> for Session {
+impl sqlx::FromRow<'_, sqlx::sqlite::SqliteRow> for SessionRow {
     fn from_row(row: &sqlx::sqlite::SqliteRow) -> sqlx::Result<Self> {
         Ok(Self {
             token_hash: row.try_get("token_hash")?,
@@ -92,12 +92,42 @@ impl sqlx::FromRow<'_, sqlx::sqlite::SqliteRow> for Session {
 /// Create a user session for the given admin.
 pub(crate) async fn create_admin_session<'e, E>(
     exec: E,
-    admin: &AdminRow,
-) -> anyhow::Result<Session>
+    token_hash: &[u8],
+    admin_id: AdminId,
+) -> sqlx::Result<()>
 where
     E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
 {
-    todo!()
+    sqlx::query!(
+        r#"
+            INSERT INTO sessions (token_hash, admin_id)
+            VALUES ($1, $2)
+        "#,
+        token_hash,
+        admin_id,
+    )
+    .execute(exec)
+    .await?;
+    Ok(())
+}
+
+/// Get a session by the token hash.
+pub(crate) async fn get_session_by_token_hash<'e, E>(
+    exec: E,
+    token_hash: &[u8],
+) -> sqlx::Result<Option<SessionRow>>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    sqlx::query_as::<_, SessionRow>(
+        r#"
+            SELECT * FROM sessions
+            WHERE token_hash = $1
+        "#,
+    )
+    .bind(token_hash)
+    .fetch_optional(exec)
+    .await
 }
 
 /// Clean up old sessions. Deletes all sessions for which the `expires_at`
@@ -105,16 +135,16 @@ where
 /// periodically to keep the session table reasonably sized.
 pub(crate) async fn cleanup_old_sessions<'e, E>(
     exec: E,
-) -> anyhow::Result<sqlx::sqlite::SqliteQueryResult>
+) -> sqlx::Result<sqlx::sqlite::SqliteQueryResult>
 where
     E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
 {
-    Ok(sqlx::query!(
+    sqlx::query!(
         r#"
             DELETE FROM sessions
             WHERE expires_at < unixepoch('now')
         "#
     )
     .execute(exec)
-    .await?)
+    .await
 }
