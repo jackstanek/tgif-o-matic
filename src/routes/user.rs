@@ -65,9 +65,9 @@ where
     let tok = SessionToken::from_base64(sid).ok_or(AuthError::InvalidSession)?;
     let Some(session) = db::get_session_by_token_hash(exec, &tok.sha256())
         .await
-        .or_else(|e| {
+        .map_err(|e| {
             tracing::error!("couldn't fetch session from database: {e}");
-            Err(AuthError::Internal)
+            AuthError::Internal
         })?
     else {
         return Ok(None);
@@ -92,9 +92,9 @@ impl FromRequestParts<AppState> for CurrentUser {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let mut exec = state.pool().acquire().await.or_else(|e| {
+        let mut exec = state.pool().acquire().await.map_err(|e| {
             tracing::error!("couldn't connect to the database: {e}");
-            Err(AuthError::Internal)
+            AuthError::Internal
         })?;
         let jar = CookieJar::from_headers(&parts.headers);
         let sid = jar.get("sid").ok_or(AuthError::NoSession)?;
@@ -111,9 +111,9 @@ impl FromRequestParts<AppState> for MaybeCurrentUser {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let mut exec = state.pool().acquire().await.or_else(|e| {
+        let mut exec = state.pool().acquire().await.map_err(|e| {
             tracing::error!("couldn't connect to the database: {e}");
-            Err(AuthError::Internal)
+            AuthError::Internal
         })?;
         let jar = CookieJar::from_headers(&parts.headers);
         if let Some(sid) = jar.get("sid") {

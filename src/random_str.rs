@@ -35,7 +35,7 @@ impl JoinCode {
         I: Into<String>,
     {
         let i: String = inp.into();
-        (!i.is_inappropriate()).then(|| Self(i))
+        (!i.is_inappropriate()).then_some(Self(i))
     }
 
     /// Create a [`JoinCode`] from an [`rand::Rng`]. Rejection sample to select

@@ -20,8 +20,6 @@ mod game;
 mod template;
 mod user;
 
-pub(crate) use game::*;
-pub(crate) use template::*;
 pub(crate) use user::*;
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
