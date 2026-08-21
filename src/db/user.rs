@@ -97,8 +97,8 @@ pub(crate) struct SessionRow {
     pub(crate) game_id: Option<GameId>,
     pub(crate) admin_id: Option<AdminId>,
     pub(crate) player_id: Option<PlayerId>,
-    pub(crate) created_at: jiff::Timestamp,
-    pub(crate) expires_at: jiff::Timestamp,
+    pub(crate) created_at: time::Timestamp,
+    pub(crate) expires_at: time::Timestamp,
 }
 
 impl sqlx::FromRow<'_, sqlx::sqlite::SqliteRow> for SessionRow {

@@ -54,6 +54,6 @@ pub(crate) async fn init_db(config: &config::BackendConfig) -> anyhow::Result<sq
 }
 
 /// Helper to decode timestamps from the database
-fn decode_timestamp(t: i64) -> sqlx::Result<jiff::Timestamp> {
-    jiff::Timestamp::from_second(t).map_err(|e| sqlx::Error::Decode(Box::new(e)))
+fn decode_timestamp(t: i64) -> sqlx::Result<time::Timestamp> {
+    time::Timestamp::from_seconds(t).map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
