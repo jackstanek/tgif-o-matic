@@ -3,13 +3,13 @@
 use std::fmt::Display;
 
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use rand::Rng;
 use rand_chacha::rand_core::CryptoRngCore;
 use sha2::{
     Digest, Sha256,
     digest::{array::Array, consts::U32},
 };
-use tracing::info;
 
 /// Wrapper type for [`argon2::Error`], which doesn't implement
 /// [`std::error::Error`].
@@ -40,23 +40,23 @@ impl From<argon2::password_hash::Error> for Argon2Error {
     }
 }
 
-pub(crate) struct Admin {
-    username: String,
-    pw_hash: String,
+pub(crate) struct Admin<'a> {
+    username: &'a str,
+    pw_hash: &'a str,
 }
 
-impl Admin {
-    pub(crate) fn new(username: String, pw_hash: String) -> Self {
+impl<'a> Admin<'a> {
+    pub(crate) fn new(username: &'a str, pw_hash: &'a str) -> Self {
         Self { username, pw_hash }
     }
 
     /// Verify the user's password against the salted hash.
     pub(crate) fn check_password(&self, password: &str) -> Result<bool, Argon2Error> {
-        let pw_hash = PasswordHash::new(&self.pw_hash).map_err(Argon2Error::from)?;
+        let pw_hash = PasswordHash::new(self.pw_hash).map_err(Argon2Error::from)?;
         let check_result = Argon2::default()
             .verify_password(password.as_bytes(), &pw_hash)
             .is_ok();
-        info!("password check for {}: {check_result}", self.username);
+        tracing::debug!("verifying password for {}: {check_result}", self.username);
         Ok(check_result)
     }
 }
@@ -83,8 +83,20 @@ impl SessionToken {
         Sha256::digest(self.token)
     }
 
-    /// Construct a `SessionToken` from a byte slice
+    /// Construct a [`SessionToken`] from a byte slice
     pub(crate) fn from_bytes(bytes: &[u8]) -> Option<Self> {
         bytes.try_into().ok().map(|token| Self { token })
+    }
+
+    /// Construct a [`SessionToken`] from a URL-safe base64 string without
+    /// padding. This decodes using the [`URL_SAFE_NO_PAD`] base64 engine.
+    pub(crate) fn from_base64(base64: &str) -> Option<Self> {
+        let token = URL_SAFE_NO_PAD.decode(base64).ok()?;
+        Self::from_bytes(&token)
+    }
+
+    /// Encode a `SessionToken` as a base64 string.
+    pub(crate) fn base64_encode(&self) -> String {
+        URL_SAFE_NO_PAD.encode(self.token)
     }
 }
