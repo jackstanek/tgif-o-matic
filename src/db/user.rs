@@ -36,7 +36,8 @@ impl AdminRow {
 }
 
 /// Initialize an admin account if one does not exist. If an admin account
-/// exists, this is a no-op.
+/// exists, this is a no-op. Returns true if the account was created, false
+/// otherwise.
 pub(crate) async fn init_admin_account<'e, E>(
     exec: E,
     username: &str,
@@ -63,6 +64,30 @@ where
     sqlx::query("COMMIT").execute(&mut *conn).await?;
 
     Ok(result.rows_affected() > 0)
+}
+
+/// Update the admin password for the given user. No-op if the user does not
+/// exist; returns Ok(true) if a user was updated and Ok(false) otherwise.
+pub(crate) async fn update_admin_password<'e, E>(
+    exec: E,
+    username: &str,
+    phc_string: &str,
+) -> sqlx::Result<bool>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    sqlx::query!(
+        r#"
+            UPDATE admins
+            SET pw_hash = ?
+            WHERE username = ?
+        "#,
+        phc_string,
+        username,
+    )
+    .execute(exec)
+    .await
+    .map(|res| res.rows_affected() > 0)
 }
 
 /// Session record in the database.
@@ -133,9 +158,7 @@ where
 /// Clean up old sessions. Deletes all sessions for which the `expires_at`
 /// timestamp is earlier than the current time. This function should run
 /// periodically to keep the session table reasonably sized.
-pub(crate) async fn cleanup_old_sessions<'e, E>(
-    exec: E,
-) -> sqlx::Result<sqlx::sqlite::SqliteQueryResult>
+pub(crate) async fn cleanup_old_sessions<'e, E>(exec: E) -> sqlx::Result<u64>
 where
     E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
 {
@@ -147,4 +170,11 @@ where
     )
     .execute(exec)
     .await
+    .map(|res| {
+        let rows = res.rows_affected();
+        if rows > 0 {
+            tracing::info!("cleaned up {rows} sessions");
+        }
+        rows
+    })
 }

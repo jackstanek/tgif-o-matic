@@ -1,7 +1,6 @@
 use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 use rand_chacha::rand_core::SeedableRng;
-use sqlx::Sqlite;
-use tracing::{debug, info};
+use sqlx::SqlitePool;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
@@ -23,17 +22,16 @@ const DEFAULT_ADMIN_USERNAME: &str = "admin";
 const RANDOM_ADMIN_PW_LENGTH: usize = 12;
 
 /// Initialize an admin account if one does not exist. If at least one admin
-/// account exists, then this is a no-op. Otherwise, if no admin accounts exist,
-/// initialize one with the username and password supplied in the configuration.
-/// If no credentials are in the configuration, then use username "admin" and a
-/// random password.
-pub(crate) async fn init_admin_account<'e, E, R>(
+/// account exists, then update the password to the password in the config.
+/// Otherwise, if no admin accounts exist, initialize one with the username and
+/// password supplied in the configuration. If no credentials are in the
+/// configuration, then use username "admin" and a random password.
+pub(crate) async fn init_admin_account<R>(
     rng: &mut R,
-    exec: E,
+    pool: &SqlitePool,
     config: &crate::config::BackendConfig,
 ) -> anyhow::Result<()>
 where
-    E: sqlx::Acquire<'e, Database = Sqlite>,
     R: rand::CryptoRng + rand::Rng,
 {
     let (admin_username, admin_password) = if let Some(pw) = &config.admin_user_password {
@@ -49,9 +47,20 @@ where
         .hash_password(admin_password.as_bytes(), &admin_salt)
         .map_err(Argon2Error::from)?;
 
-    let res = db::init_admin_account(exec, &admin_username, &phc_string.to_string()).await?;
-    if res {
-        info!("admin account created: admin/{admin_password}");
+    let did_init = db::init_admin_account(pool, &admin_username, &phc_string.to_string()).await?;
+    if did_init {
+        tracing::info!("admin account created: admin/{admin_password}");
+    } else {
+        // admin account exists, update the password
+        let did_update =
+            db::update_admin_password(pool, &admin_username, &phc_string.to_string()).await?;
+        if did_update {
+            tracing::info!("updated admin password (user: {admin_username}) to environment config");
+        } else {
+            tracing::warn!(
+                "admin password set in environment config but password was not updated in database"
+            )
+        }
     }
     Ok(())
 }
@@ -72,8 +81,10 @@ async fn main() -> anyhow::Result<()> {
         .expect("could not initialize database");
 
     let mut rng = rand_chacha::ChaCha20Rng::from_rng(&mut rand::rngs::OsRng)?;
-    debug!("bootstrapped RNG");
+    tracing::debug!("bootstrapped RNG");
 
+    // Clean up the database upon launch
+    db::cleanup_old_sessions(&db).await?;
     init_admin_account(&mut rng, &db, &config).await?;
 
     let state = AppStateBuilder::default()
