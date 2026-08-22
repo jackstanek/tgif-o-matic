@@ -9,7 +9,10 @@ use axum::{
 
 use crate::{
     appstate::AppState,
-    routes::{AppError, user::CurrentUser},
+    routes::{
+        AppError,
+        user::{CurrentAdmin, CurrentUser},
+    },
 };
 
 #[derive(Template)]
@@ -25,13 +28,8 @@ impl<'s> DashboardTemplate<'s> {
 }
 
 pub(crate) async fn dashboard_get(
-    State(state): State<AppState>,
-    user: CurrentUser,
+    CurrentAdmin(user): CurrentAdmin,
 ) -> Result<Response<Body>, AppError> {
-    if let CurrentUser::Admin(admin) = user {
-        let content = DashboardTemplate::new(admin.username());
-        Ok(content.render().map(Html::from)?.into_response())
-    } else {
-        Ok("not logged in".into_response())
-    }
+    let content = DashboardTemplate::new(user.username());
+    Ok(content.render().map(Html::from)?.into_response())
 }

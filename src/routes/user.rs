@@ -32,6 +32,8 @@ pub(crate) enum CurrentUser {
     Player(PlayerId),
 }
 
+pub(crate) struct CurrentAdmin(pub(crate) Admin<AdminId>);
+
 /// Extractor for a user which might be logged in. This is similar to [`CurrentUser`],
 /// but will not bounce the request if no session is found, instead wrapping [`None`].
 #[derive(Debug, From)]
@@ -45,6 +47,8 @@ pub(crate) enum AuthError {
     InvalidSession,
     #[error("bad credentials")]
     BadCredentials,
+    #[error("unauthorized")]
+    Unauthorized,
     #[error("internal error")]
     Internal,
 }
@@ -62,6 +66,7 @@ impl IntoResponse for AuthError {
             AuthError::NoSession | AuthError::InvalidSession | AuthError::BadCredentials => {
                 StatusCode::UNAUTHORIZED.into_response()
             }
+            AuthError::Unauthorized => StatusCode::UNAUTHORIZED.into_response(),
             AuthError::Internal => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
     }
@@ -111,6 +116,25 @@ impl FromRequestParts<AppState> for CurrentUser {
         validate_session(&mut *exec, sid.value())
             .await
             .and_then(|mu| mu.ok_or(AuthError::InvalidSession))
+    }
+}
+
+impl FromRequestParts<AppState> for CurrentAdmin {
+    type Rejection = AuthError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        CurrentUser::from_request_parts(parts, state)
+            .await
+            .and_then(|user| {
+                if let CurrentUser::Admin(admin) = user {
+                    Ok(CurrentAdmin(admin))
+                } else {
+                    Err(AuthError::Unauthorized)
+                }
+            })
     }
 }
 
@@ -187,7 +211,7 @@ pub(crate) async fn login_post(
             .path("/")
             .build();
         let jar = jar.add(cookie);
-        Ok((jar, Redirect::to("/")).into_response())
+        Ok((jar, Redirect::to("/dashboard")).into_response())
     } else {
         Err(AuthError::BadCredentials.into())
     }
