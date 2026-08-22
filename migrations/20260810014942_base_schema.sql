@@ -60,7 +60,8 @@ CREATE TABLE players (
     game_id       INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
     team_id       INTEGER REFERENCES teams(id) ON DELETE SET NULL,
     nickname      TEXT NOT NULL,
-    created_at    INTEGER NOT NULL
+    created_at    INTEGER NOT NULL,
+    UNIQUE (id, game_id)
 ) STRICT;
 
 -- Information about the teams
@@ -82,7 +83,15 @@ CREATE TABLE sessions (
     player_id     INTEGER REFERENCES players(id), -- null for admin sessions
     created_at    INTEGER NOT NULL DEFAULT (unixepoch('now')),
     expires_at    INTEGER NOT NULL DEFAULT (unixepoch('now', '+24 hours')),
-    CHECK ((admin_id IS NULL) <> (player_id IS NULL AND game_id IS NULL))
+
+    FOREIGN KEY (player_id, game_id)
+        REFERENCES players(id, game_id),
+
+    CHECK (
+        (admin_id IS NOT NULL AND player_id IS NULL AND game_id IS NULL)
+        OR
+        (admin_id IS NULL AND player_id IS NOT NULL AND game_id IS NOT NULL)
+    )
 ) STRICT;
 
 -- Game state to track progression of the game.

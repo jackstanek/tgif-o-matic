@@ -9,7 +9,7 @@ use crate::config;
 macro_rules! db_id_type {
     ($($name:ident),+) => {
         $(
-            #[derive(sqlx::Type, Debug, Clone, PartialEq, Eq)]
+            #[derive(sqlx::Type, Debug, Copy, Clone, PartialEq, Eq)]
             #[sqlx(transparent)]
             pub(crate) struct $name(i32);
         )+

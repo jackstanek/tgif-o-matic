@@ -40,24 +40,39 @@ impl From<argon2::password_hash::Error> for Argon2Error {
     }
 }
 
-pub(crate) struct Admin<'a> {
-    username: &'a str,
-    pw_hash: &'a str,
+#[derive(Debug)]
+pub(crate) struct Admin<T> {
+    username: String,
+    pw_hash: String,
+    tag: T,
 }
 
-impl<'a> Admin<'a> {
-    pub(crate) fn new(username: &'a str, pw_hash: &'a str) -> Self {
-        Self { username, pw_hash }
+impl<T> Admin<T> {
+    pub(crate) fn new(username: impl Into<String>, pw_hash: impl Into<String>, tag: T) -> Self {
+        Self {
+            username: username.into(),
+            pw_hash: pw_hash.into(),
+            tag,
+        }
     }
 
     /// Verify the user's password against the salted hash.
     pub(crate) fn check_password(&self, password: &str) -> Result<bool, Argon2Error> {
-        let pw_hash = PasswordHash::new(self.pw_hash).map_err(Argon2Error::from)?;
+        let pw_hash = PasswordHash::new(&self.pw_hash).map_err(Argon2Error::from)?;
         let check_result = Argon2::default()
             .verify_password(password.as_bytes(), &pw_hash)
             .is_ok();
         tracing::debug!("verifying password for {}: {check_result}", self.username);
         Ok(check_result)
+    }
+
+    pub(crate) fn username(&self) -> &str {
+        &self.username
+    }
+
+    /// Get the tag object of this admin
+    pub(crate) fn tag(&self) -> &T {
+        &self.tag
     }
 }
 

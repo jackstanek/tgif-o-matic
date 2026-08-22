@@ -14,6 +14,7 @@ use axum_extra::extract::{
 };
 use derive_more::From;
 use serde::Deserialize;
+use sqlx::SqliteConnection;
 
 use crate::domain;
 use crate::routes::AppError;
@@ -25,9 +26,9 @@ use crate::{
 
 /// Extractor for the current logged-in user. In the event that no user session
 /// exists, a handler with this extractor will bounce the request.
-#[derive(Debug)]
+#[derive(Debug, From)]
 pub(crate) enum CurrentUser {
-    Admin(AdminId),
+    Admin(Admin<AdminId>),
     Player(PlayerId),
 }
 
@@ -36,12 +37,23 @@ pub(crate) enum CurrentUser {
 #[derive(Debug, From)]
 pub(crate) struct MaybeCurrentUser(Option<CurrentUser>);
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum AuthError {
+    #[error("no such session")]
     NoSession,
+    #[error("invalid session")]
     InvalidSession,
+    #[error("bad credentials")]
     BadCredentials,
+    #[error("internal error")]
     Internal,
+}
+
+impl From<sqlx::Error> for AuthError {
+    fn from(e: sqlx::Error) -> Self {
+        tracing::error!("database error: {e:?}");
+        AuthError::Internal
+    }
 }
 
 impl IntoResponse for AuthError {
@@ -58,24 +70,22 @@ impl IntoResponse for AuthError {
 /// Get the user corresponding to the given session token. If no session exists
 /// matching the session ID, returns [`AuthError::NoSession`]. If the session
 /// token is malformed, returns [`AuthError::InvalidSession`].
-async fn validate_session<'e, E>(exec: E, sid: &str) -> Result<Option<CurrentUser>, AuthError>
-where
-    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
-{
+async fn validate_session(
+    conn: &mut SqliteConnection,
+    sid: &str,
+) -> Result<Option<CurrentUser>, AuthError> {
     let tok = SessionToken::from_base64(sid).ok_or(AuthError::InvalidSession)?;
-    let Some(session) = db::get_session_by_token_hash(exec, &tok.sha256())
-        .await
-        .map_err(|e| {
-            tracing::error!("couldn't fetch session from database: {e}");
-            AuthError::Internal
-        })?
-    else {
+    let Some(session) = db::get_session_by_token_hash(&mut *conn, &tok.sha256()).await? else {
         return Ok(None);
     };
 
     if let Some(admin_id) = session.admin_id {
         tracing::debug!("validated admin session for {admin_id:?}");
-        Ok(Some(CurrentUser::Admin(admin_id)))
+        let Some(admin) = db::get_admin_by_id(&mut *conn, admin_id).await? else {
+            tracing::error!("session admin id {admin_id:?} did not exist in the database");
+            return Ok(None);
+        };
+        Ok(Some(CurrentUser::Admin(admin.into())))
     } else if let Some(player_id) = session.player_id {
         tracing::debug!("validated player session for {player_id:?}");
         Ok(Some(CurrentUser::Player(player_id)))
@@ -127,9 +137,9 @@ impl FromRequestParts<AppState> for MaybeCurrentUser {
     }
 }
 
-impl<'a> From<&'a db::AdminRow> for domain::auth::Admin<'a> {
-    fn from(row: &'a db::AdminRow) -> Self {
-        domain::auth::Admin::new(&row.username, &row.pw_hash)
+impl From<db::AdminRow> for domain::auth::Admin<AdminId> {
+    fn from(row: db::AdminRow) -> Self {
+        domain::auth::Admin::new(row.username, row.pw_hash, row.id)
     }
 }
 
@@ -146,8 +156,7 @@ pub(crate) struct AuthInput {
 /// Send login form to client
 pub(crate) async fn login_get(MaybeCurrentUser(user): MaybeCurrentUser) -> Response<Body> {
     if user.is_some_and(|user| matches!(user, CurrentUser::Admin(_))) {
-        // TODO: change this to the dashboard
-        return Redirect::to("/").into_response();
+        return Redirect::to("/dashboard").into_response();
     }
     let content = LoginPageTemplate {}.render().unwrap().to_string();
     Html(content).into_response()
@@ -160,15 +169,16 @@ pub(crate) async fn login_post(
     Form(input): Form<AuthInput>,
 ) -> Result<Response<Body>, AppError> {
     let mut conn = state.pool().acquire().await?;
-    let row = db::AdminRow::by_username(&mut *conn, &input.username).await?;
+    let row = db::get_admin_by_username(&mut *conn, &input.username).await?;
 
     if let Some(arow) = row {
-        let admin = Admin::from(&arow);
+        let id = arow.id;
+        let admin = Admin::from(arow);
         if !admin.check_password(&input.password)? {
             return Err(AuthError::BadCredentials.into());
         }
         let tok = SessionToken::generate(&mut state.rng());
-        db::create_admin_session(&mut *conn, &tok.sha256(), arow.id).await?;
+        db::create_admin_session(&mut *conn, &tok.sha256(), id).await?;
 
         let cookie = Cookie::build(("sid", tok.base64_encode()))
             .http_only(true)

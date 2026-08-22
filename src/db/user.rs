@@ -18,21 +18,35 @@ pub(crate) struct AdminRow {
     pub(crate) pw_hash: String,
 }
 
-impl AdminRow {
-    /// Get a single [`AdminRow`] by username.
-    pub(crate) async fn by_username<'e, E>(exec: E, username: &str) -> sqlx::Result<Option<Self>>
-    where
-        E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
-    {
-        sqlx::query_as::<_, AdminRow>(
-            r#"
+pub(crate) async fn get_admin_by_username<'e, E>(
+    exec: E,
+    username: &str,
+) -> sqlx::Result<Option<AdminRow>>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    sqlx::query_as::<_, AdminRow>(
+        r#"
             SELECT id, username, pw_hash FROM admins WHERE username = ?
             "#,
-        )
-        .bind(username)
-        .fetch_optional(exec)
-        .await
-    }
+    )
+    .bind(username)
+    .fetch_optional(exec)
+    .await
+}
+
+pub(crate) async fn get_admin_by_id<'e, E>(exec: E, id: AdminId) -> sqlx::Result<Option<AdminRow>>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    sqlx::query_as::<_, AdminRow>(
+        r#"
+            SELECT id, username, pw_hash FROM admins WHERE id = ?
+            "#,
+    )
+    .bind(id)
+    .fetch_optional(exec)
+    .await
 }
 
 /// Initialize an admin account if one does not exist. If an admin account
@@ -115,6 +129,7 @@ impl sqlx::FromRow<'_, sqlx::sqlite::SqliteRow> for SessionRow {
 }
 
 /// Create a user session for the given admin.
+#[tracing::instrument]
 pub(crate) async fn create_admin_session<'e, E>(
     exec: E,
     token_hash: &[u8],
